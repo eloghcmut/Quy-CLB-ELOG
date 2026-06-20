@@ -1,295 +1,490 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
 import os
 import sqlite3
-from pathlib import Path
+from functools import wraps
 
-# Only used when the app is deployed with PostgreSQL, for example on Render.
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+
 try:
     import psycopg2
-    from psycopg2.extras import RealDictCursor
+    import psycopg2.extras
 except ImportError:
     psycopg2 = None
-    RealDictCursor = None
+
 
 app = Flask(__name__)
+
+# Secret key dùng cho session đăng nhập
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "finance.db"
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "").strip()
-USE_POSTGRES = bool(DATABASE_URL)
-PLACEHOLDER = "%s" if USE_POSTGRES else "?"
+# Mật khẩu đăng nhập web
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "123456")
+
+# Database URL: local không có thì dùng SQLite, Render/Neon thì dùng PostgreSQL
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# Nếu sau này muốn thêm Gen, vào Render Environment thêm:
+# GEN_OPTIONS = Gen 3,Gen 4,Gen 5
+GEN_OPTIONS = [
+    gen.strip()
+    for gen in os.environ.get("GEN_OPTIONS", "Gen 3,Gen 4").split(",")
+    if gen.strip()
+]
 
 
-def normalize_database_url(url):
-    """Render normally gives postgresql://, but this also supports postgres://."""
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql://", 1)
-    return url
+def is_postgres():
+    return DATABASE_URL and DATABASE_URL.startswith(("postgres://", "postgresql://"))
 
 
 def get_db_connection():
-    """Create a database connection.
-
-    Local machine: SQLite finance.db
-    Render/hosting: PostgreSQL when DATABASE_URL is provided
     """
-    if USE_POSTGRES:
+    Local: dùng SQLite finance.db
+    Render/Neon: dùng PostgreSQL thông qua DATABASE_URL
+    """
+    if is_postgres():
         if psycopg2 is None:
-            raise RuntimeError("psycopg2-binary is required when using DATABASE_URL.")
-        return psycopg2.connect(
-            normalize_database_url(DATABASE_URL),
-            cursor_factory=RealDictCursor,
-        )
+            raise RuntimeError("psycopg2-binary chưa được cài. Hãy kiểm tra requirements.txt")
 
-    conn = sqlite3.connect(DB_PATH)
+        db_url = DATABASE_URL
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+        return psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+
+    conn = sqlite3.connect("finance.db")
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def execute_db(sql, params=()):
-    """Run INSERT/UPDATE/DELETE/CREATE statements."""
-    conn = get_db_connection()
-    try:
-        if USE_POSTGRES:
-            with conn.cursor() as cur:
-                cur.execute(sql, params)
-            conn.commit()
-        else:
-            conn.execute(sql, params)
-            conn.commit()
-    finally:
-        conn.close()
+def placeholder():
+    """
+    SQLite dùng ?
+    PostgreSQL dùng %s
+    """
+    return "%s" if is_postgres() else "?"
 
 
-def fetch_all(sql, params=()):
-    """Fetch many rows."""
-    conn = get_db_connection()
-    try:
-        if USE_POSTGRES:
-            with conn.cursor() as cur:
-                cur.execute(sql, params)
-                return cur.fetchall()
-        return conn.execute(sql, params).fetchall()
-    finally:
-        conn.close()
-
-
-def fetch_one(sql, params=()):
-    """Fetch one row."""
-    conn = get_db_connection()
-    try:
-        if USE_POSTGRES:
-            with conn.cursor() as cur:
-                cur.execute(sql, params)
-                return cur.fetchone()
-        return conn.execute(sql, params).fetchone()
-    finally:
-        conn.close()
+def column_exists_sqlite(conn, table_name, column_name):
+    cursor = conn.cursor()
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    columns = [row["name"] for row in cursor.fetchall()]
+    return column_name in columns
 
 
 def init_db():
-    """Create tables if they do not exist."""
-    if USE_POSTGRES:
-        income_table_sql = """
+    """
+    Tạo bảng nếu chưa có.
+    Nếu bảng cũ chưa có cột generation thì tự thêm cột generation.
+    Data cũ sẽ được đưa vào 'Chưa phân loại'.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if is_postgres():
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS incomes (
                 id SERIAL PRIMARY KEY,
+                generation TEXT DEFAULT 'Chưa phân loại',
                 person TEXT NOT NULL,
-                amount INTEGER NOT NULL CHECK(amount >= 0),
+                amount BIGINT NOT NULL,
                 description TEXT NOT NULL,
-                date TEXT NOT NULL
+                date TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        expense_table_sql = """
+            """
+        )
+
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS expenses (
                 id SERIAL PRIMARY KEY,
+                generation TEXT DEFAULT 'Chưa phân loại',
                 person TEXT NOT NULL,
-                amount INTEGER NOT NULL CHECK(amount >= 0),
+                amount BIGINT NOT NULL,
                 description TEXT NOT NULL,
-                date TEXT NOT NULL
+                date TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
+            """
+        )
+
+        cursor.execute(
+            "ALTER TABLE incomes ADD COLUMN IF NOT EXISTS generation TEXT DEFAULT 'Chưa phân loại'"
+        )
+        cursor.execute(
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS generation TEXT DEFAULT 'Chưa phân loại'"
+        )
+
+        cursor.execute(
+            "UPDATE incomes SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
+        )
+        cursor.execute(
+            "UPDATE expenses SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
+        )
+
     else:
-        income_table_sql = """
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS incomes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                generation TEXT DEFAULT 'Chưa phân loại',
                 person TEXT NOT NULL,
-                amount INTEGER NOT NULL CHECK(amount >= 0),
+                amount INTEGER NOT NULL,
                 description TEXT NOT NULL,
-                date TEXT NOT NULL
+                date TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        expense_table_sql = """
+            """
+        )
+
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                generation TEXT DEFAULT 'Chưa phân loại',
                 person TEXT NOT NULL,
-                amount INTEGER NOT NULL CHECK(amount >= 0),
+                amount INTEGER NOT NULL,
                 description TEXT NOT NULL,
-                date TEXT NOT NULL
+                date TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
+            """
+        )
 
-    execute_db(income_table_sql)
-    execute_db(expense_table_sql)
+        if not column_exists_sqlite(conn, "incomes", "generation"):
+            cursor.execute(
+                "ALTER TABLE incomes ADD COLUMN generation TEXT DEFAULT 'Chưa phân loại'"
+            )
+
+        if not column_exists_sqlite(conn, "expenses", "generation"):
+            cursor.execute(
+                "ALTER TABLE expenses ADD COLUMN generation TEXT DEFAULT 'Chưa phân loại'"
+            )
+
+        cursor.execute(
+            "UPDATE incomes SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
+        )
+        cursor.execute(
+            "UPDATE expenses SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
+        )
+
+    conn.commit()
+    conn.close()
 
 
+@app.template_filter("vnd")
 def format_vnd(value):
-    """Format number into Vietnamese currency style."""
     try:
-        value = int(value or 0)
-    except (TypeError, ValueError):
-        value = 0
-    return f"{value:,.0f} VND"
+        return f"{int(value):,} VND"
+    except (ValueError, TypeError):
+        return "0 VND"
 
 
-app.jinja_env.filters["vnd"] = format_vnd
+def login_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
-def validate_form(person, amount, description, date):
-    """Validate input data from form."""
-    if not person or not amount or not description or not date:
-        return False, "Vui lòng nhập đầy đủ thông tin."
+def generation_required(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
 
-    try:
-        amount = int(amount)
-    except ValueError:
-        return False, "Số tiền phải là số hợp lệ."
+        if not session.get("selected_gen"):
+            return redirect(url_for("select_generation"))
 
-    if amount < 0:
-        return False, "Số tiền không được là số âm."
+        return func(*args, **kwargs)
 
-    return True, amount
+    return wrapper
 
 
-@app.before_request
-def require_login():
-    """Protect the public website with a simple password when APP_PASSWORD is set."""
-    if not APP_PASSWORD:
-        return None
+@app.route("/")
+def index():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
-    allowed_endpoints = {"login", "static"}
-    if request.endpoint in allowed_endpoints:
-        return None
+    if not session.get("selected_gen"):
+        return redirect(url_for("select_generation"))
 
-    if session.get("logged_in"):
-        return None
-
-    return redirect(url_for("login"))
+    return redirect(url_for("overview"))
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if not APP_PASSWORD:
-        return redirect(url_for("overview"))
-
     if request.method == "POST":
         password = request.form.get("password", "")
+
         if password == APP_PASSWORD:
             session["logged_in"] = True
-            flash("Đăng nhập thành công!", "success")
-            return redirect(url_for("overview"))
-        flash("Sai mật khẩu, vui lòng thử lại.", "danger")
+            flash("Đăng nhập thành công.", "success")
+            return redirect(url_for("select_generation"))
+
+        flash("Mật khẩu không đúng. Vui lòng thử lại.", "danger")
 
     return render_template("login.html")
 
 
-@app.route("/logout", methods=["POST"])
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
-    flash("Đã đăng xuất.", "success")
+    flash("Đã đăng xuất.", "info")
     return redirect(url_for("login"))
 
 
-@app.route("/")
-def home():
-    return redirect(url_for("overview"))
-
-
-@app.route("/income", methods=["GET", "POST"])
-def income():
+@app.route("/select-generation", methods=["GET", "POST"])
+@login_required
+def select_generation():
     if request.method == "POST":
-        person = request.form.get("person", "").strip()
-        amount = request.form.get("amount", "").strip()
-        description = request.form.get("description", "").strip()
-        date = request.form.get("date", "").strip()
+        selected_gen = request.form.get("generation", "").strip()
 
-        is_valid, result = validate_form(person, amount, description, date)
-        if not is_valid:
-            flash(result, "danger")
-        else:
-            execute_db(
-                f"INSERT INTO incomes (person, amount, description, date) VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})",
-                (person, result, description, date),
-            )
-            flash("Đã thêm khoản tiền vào thành công!", "success")
-            return redirect(url_for("income"))
+        if selected_gen not in GEN_OPTIONS:
+            flash("Vui lòng chọn Gen hợp lệ.", "danger")
+            return redirect(url_for("select_generation"))
 
-    incomes = fetch_all("SELECT * FROM incomes ORDER BY date DESC, id DESC")
-    return render_template("income.html", incomes=incomes)
+        session["selected_gen"] = selected_gen
+        flash(f"Đang truy cập quỹ {selected_gen}.", "success")
+        return redirect(url_for("overview"))
+
+    return render_template("select_generation.html", gen_options=GEN_OPTIONS)
 
 
-@app.route("/expense", methods=["GET", "POST"])
-def expense():
-    if request.method == "POST":
-        person = request.form.get("person", "").strip()
-        amount = request.form.get("amount", "").strip()
-        description = request.form.get("description", "").strip()
-        date = request.form.get("date", "").strip()
-
-        is_valid, result = validate_form(person, amount, description, date)
-        if not is_valid:
-            flash(result, "danger")
-        else:
-            execute_db(
-                f"INSERT INTO expenses (person, amount, description, date) VALUES ({PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER}, {PLACEHOLDER})",
-                (person, result, description, date),
-            )
-            flash("Đã thêm khoản tiền ra thành công!", "success")
-            return redirect(url_for("expense"))
-
-    expenses = fetch_all("SELECT * FROM expenses ORDER BY date DESC, id DESC")
-    return render_template("expense.html", expenses=expenses)
+@app.route("/change-generation")
+@login_required
+def change_generation():
+    session.pop("selected_gen", None)
+    return redirect(url_for("select_generation"))
 
 
 @app.route("/overview")
+@generation_required
 def overview():
-    incomes = fetch_all("SELECT * FROM incomes ORDER BY date DESC, id DESC")
-    expenses = fetch_all("SELECT * FROM expenses ORDER BY date DESC, id DESC")
+    selected_gen = session["selected_gen"]
+    ph = placeholder()
 
-    total_income_row = fetch_one("SELECT COALESCE(SUM(amount), 0) AS total FROM incomes")
-    total_expense_row = fetch_one("SELECT COALESCE(SUM(amount), 0) AS total FROM expenses")
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-    total_income = total_income_row["total"] if total_income_row else 0
-    total_expense = total_expense_row["total"] if total_expense_row else 0
-    remaining = total_income - total_expense
+    cursor.execute(
+        f"SELECT COALESCE(SUM(amount), 0) AS total FROM incomes WHERE generation = {ph}",
+        (selected_gen,),
+    )
+    total_income = cursor.fetchone()["total"] or 0
+
+    cursor.execute(
+        f"SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE generation = {ph}",
+        (selected_gen,),
+    )
+    total_expense = cursor.fetchone()["total"] or 0
+
+    remaining = int(total_income) - int(total_expense)
+
+    cursor.execute(
+        f"""
+        SELECT id, generation, person, amount, description, date, created_at
+        FROM incomes
+        WHERE generation = {ph}
+        ORDER BY date DESC, id DESC
+        """,
+        (selected_gen,),
+    )
+    incomes = cursor.fetchall()
+
+    cursor.execute(
+        f"""
+        SELECT id, generation, person, amount, description, date, created_at
+        FROM expenses
+        WHERE generation = {ph}
+        ORDER BY date DESC, id DESC
+        """,
+        (selected_gen,),
+    )
+    expenses = cursor.fetchall()
+
+    conn.close()
 
     return render_template(
         "overview.html",
-        incomes=incomes,
-        expenses=expenses,
+        selected_gen=selected_gen,
         total_income=total_income,
         total_expense=total_expense,
         remaining=remaining,
+        incomes=incomes,
+        expenses=expenses,
     )
 
 
+@app.route("/income", methods=["GET", "POST"])
+@generation_required
+def income():
+    selected_gen = session["selected_gen"]
+    ph = placeholder()
+
+    if request.method == "POST":
+        person = request.form.get("person", "").strip()
+        amount_raw = request.form.get("amount", "").strip()
+        description = request.form.get("description", "").strip()
+        date = request.form.get("date", "").strip()
+
+        if not person or not amount_raw or not description or not date:
+            flash("Vui lòng nhập đầy đủ thông tin.", "danger")
+            return redirect(url_for("income"))
+
+        try:
+            amount = int(float(amount_raw))
+        except ValueError:
+            flash("Số tiền không hợp lệ.", "danger")
+            return redirect(url_for("income"))
+
+        if amount < 0:
+            flash("Số tiền không được âm.", "danger")
+            return redirect(url_for("income"))
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            f"""
+            INSERT INTO incomes (generation, person, amount, description, date)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            """,
+            (selected_gen, person, amount, description, date),
+        )
+
+        conn.commit()
+        conn.close()
+
+        flash(f"Đã thêm khoản tiền vào cho {selected_gen}.", "success")
+        return redirect(url_for("income"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        SELECT id, generation, person, amount, description, date, created_at
+        FROM incomes
+        WHERE generation = {ph}
+        ORDER BY date DESC, id DESC
+        """,
+        (selected_gen,),
+    )
+    incomes = cursor.fetchall()
+
+    conn.close()
+
+    return render_template("income.html", incomes=incomes, selected_gen=selected_gen)
+
+
+@app.route("/expense", methods=["GET", "POST"])
+@generation_required
+def expense():
+    selected_gen = session["selected_gen"]
+    ph = placeholder()
+
+    if request.method == "POST":
+        person = request.form.get("person", "").strip()
+        amount_raw = request.form.get("amount", "").strip()
+        description = request.form.get("description", "").strip()
+        date = request.form.get("date", "").strip()
+
+        if not person or not amount_raw or not description or not date:
+            flash("Vui lòng nhập đầy đủ thông tin.", "danger")
+            return redirect(url_for("expense"))
+
+        try:
+            amount = int(float(amount_raw))
+        except ValueError:
+            flash("Số tiền không hợp lệ.", "danger")
+            return redirect(url_for("expense"))
+
+        if amount < 0:
+            flash("Số tiền không được âm.", "danger")
+            return redirect(url_for("expense"))
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            f"""
+            INSERT INTO expenses (generation, person, amount, description, date)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            """,
+            (selected_gen, person, amount, description, date),
+        )
+
+        conn.commit()
+        conn.close()
+
+        flash(f"Đã thêm khoản tiền ra cho {selected_gen}.", "success")
+        return redirect(url_for("expense"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        SELECT id, generation, person, amount, description, date, created_at
+        FROM expenses
+        WHERE generation = {ph}
+        ORDER BY date DESC, id DESC
+        """,
+        (selected_gen,),
+    )
+    expenses = cursor.fetchall()
+
+    conn.close()
+
+    return render_template("expense.html", expenses=expenses, selected_gen=selected_gen)
+
+
 @app.route("/delete-income/<int:item_id>", methods=["POST"])
+@generation_required
 def delete_income(item_id):
-    execute_db(f"DELETE FROM incomes WHERE id = {PLACEHOLDER}", (item_id,))
+    selected_gen = session["selected_gen"]
+    ph = placeholder()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"DELETE FROM incomes WHERE id = {ph} AND generation = {ph}",
+        (item_id, selected_gen),
+    )
+
+    conn.commit()
+    conn.close()
+
     flash("Đã xóa khoản tiền vào.", "success")
     return redirect(request.referrer or url_for("income"))
 
 
 @app.route("/delete-expense/<int:item_id>", methods=["POST"])
+@generation_required
 def delete_expense(item_id):
-    execute_db(f"DELETE FROM expenses WHERE id = {PLACEHOLDER}", (item_id,))
+    selected_gen = session["selected_gen"]
+    ph = placeholder()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"DELETE FROM expenses WHERE id = {ph} AND generation = {ph}",
+        (item_id, selected_gen),
+    )
+
+    conn.commit()
+    conn.close()
+
     flash("Đã xóa khoản tiền ra.", "success")
     return redirect(request.referrer or url_for("expense"))
 
 
-# Important for deployment: gunicorn imports app.py but does not run the block below.
-# Therefore, initialize the database when the module is imported.
 init_db()
 
 
