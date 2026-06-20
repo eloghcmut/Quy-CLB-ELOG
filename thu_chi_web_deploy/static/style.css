@@ -36,6 +36,7 @@ body {
     border-radius: 16px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
     overflow: hidden;
+    background: #ffffff;
 }
 
 .card-header {
@@ -147,6 +148,67 @@ table td {
     max-width: 460px;
 }
 
+/* ================================
+   BACKGROUND CHO TRANG LOGIN + CHỌN GEN
+   Chỉ áp dụng cho body có class auth-page
+================================ */
+
+.auth-page {
+    background-image: url("/static/background.png");
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    background-attachment: fixed;
+    min-height: 100vh;
+    position: relative;
+}
+
+/* Lớp phủ nhẹ: hình nền vẫn rõ, form vẫn dễ đọc */
+.auth-page::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.15);
+    z-index: 0;
+}
+
+/* Đẩy form nổi lên trên lớp phủ */
+.auth-page .container {
+    position: relative;
+    z-index: 1;
+}
+
+/* Card đăng nhập và chọn Gen */
+.auth-page .custom-card {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+}
+
+/* Header của card cho nổi hơn trên nền */
+.auth-page .card-header {
+    background: rgba(20, 20, 30, 0.95) !important;
+    color: #ffffff !important;
+    border-bottom: none;
+}
+
+/* Input nhìn mềm hơn */
+.auth-page .form-control,
+.auth-page .form-select {
+    border-radius: 12px;
+    border: 1px solid #d6dce8;
+}
+
+/* Button đẹp hơn */
+.auth-page .btn-dark {
+    border-radius: 12px;
+    font-weight: 700;
+}
+
+/* Responsive cho điện thoại */
 @media (max-width: 768px) {
     .summary-card h2 {
         font-size: 24px;
@@ -159,5 +221,14 @@ table td {
     .gen-badge {
         display: inline-block;
         margin: 8px 0;
+    }
+
+    .auth-page {
+        background-position: center center;
+        background-size: cover;
+    }
+
+    .auth-page .custom-card {
+        margin: 0 12px;
     }
 }
