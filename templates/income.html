@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Tiền vào{% endblock %}
+{% block title %}Tiền vào - {{ selected_gen }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Tiền vào</h1>
-    <p>Nhập và theo dõi các khoản tiền nhận được.</p>
+    <h1>Tiền vào - Quỹ {{ selected_gen }}</h1>
+    <p>Nhập và theo dõi các khoản tiền nhận được của {{ selected_gen }}.</p>
 </div>
 
 <div class="card custom-card mb-4">
@@ -41,7 +41,7 @@
 
             <div class="mt-3">
                 <button type="submit" class="btn btn-success">
-                    Thêm tiền vào
+                    Thêm tiền vào {{ selected_gen }}
                 </button>
             </div>
         </form>
@@ -50,7 +50,7 @@
 
 <div class="card custom-card">
     <div class="card-header fw-semibold">
-        Danh sách tiền vào
+        Danh sách tiền vào - {{ selected_gen }}
     </div>
 
     <div class="card-body table-responsive">
@@ -75,7 +75,11 @@
                     <td>{{ item.description }}</td>
                     <td>{{ item.date }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('delete_income', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
+                        <form 
+                            method="POST" 
+                            action="{{ url_for('delete_income', item_id=item.id) }}" 
+                            onsubmit="return confirm('Bạn có chắc muốn xóa khoản tiền vào này không?');"
+                        >
                             <button type="submit" class="btn btn-danger btn-sm">
                                 Xóa
                             </button>
@@ -85,7 +89,7 @@
                 {% else %}
                 <tr>
                     <td colspan="6" class="text-center text-muted">
-                        Chưa có dữ liệu tiền vào.
+                        Chưa có dữ liệu tiền vào cho {{ selected_gen }}.
                     </td>
                 </tr>
                 {% endfor %}
