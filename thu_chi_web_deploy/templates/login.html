@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Đăng nhập{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card custom-card login-card">
+            <div class="card-header bg-dark text-white fw-semibold">
+                Đăng nhập
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Nhập mật khẩu để truy cập trang quản lý thu chi.</p>
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Mật khẩu</label>
+                        <input type="password" name="password" class="form-control" placeholder="Nhập mật khẩu" required autofocus>
+                    </div>
+                    <button type="submit" class="btn btn-dark w-100">Đăng nhập</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

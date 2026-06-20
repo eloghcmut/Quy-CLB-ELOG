@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Tiền vào{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Tiền vào</h1>
+    <p>Nhập và theo dõi các khoản tiền nhận được.</p>
+</div>
+
+<div class="card custom-card mb-4">
+    <div class="card-header bg-success text-white fw-semibold">
+        Thêm khoản tiền vào
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('income') }}">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Người chịu trách nhiệm</label>
+                    <input type="text" name="person" class="form-control" placeholder="Ví dụ: Anh" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Số tiền</label>
+                    <div class="input-group">
+                        <input type="number" name="amount" class="form-control" placeholder="Ví dụ: 1000000" min="0" required>
+                        <span class="input-group-text">VND</span>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Nội dung</label>
+                    <input type="text" name="description" class="form-control" placeholder="Ví dụ: Tiền tài trợ, tiền đóng góp..." required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ngày nhập tiền</label>
+                    <input type="date" name="date" class="form-control" required>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-success">Thêm tiền vào</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card custom-card">
+    <div class="card-header fw-semibold">
+        Danh sách tiền vào
+    </div>
+    <div class="card-body table-responsive">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>STT</th>
+                    <th>Người chịu trách nhiệm</th>
+                    <th>Số tiền</th>
+                    <th>Nội dung</th>
+                    <th>Ngày nhập tiền</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in incomes %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ item.person }}</td>
+                    <td class="money income-money">{{ item.amount | vnd }}</td>
+                    <td>{{ item.description }}</td>
+                    <td>{{ item.date }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('delete_income', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
+                            <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">Chưa có dữ liệu tiền vào.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
