@@ -12,6 +12,11 @@ body {
     color: #ffffff !important;
 }
 
+.gen-badge {
+    font-size: 14px;
+    padding: 8px 12px;
+}
+
 .page-header {
     margin-bottom: 24px;
 }
@@ -38,6 +43,7 @@ body {
 }
 
 .form-control,
+.form-select,
 .input-group-text,
 .btn {
     border-radius: 10px;
@@ -107,23 +113,11 @@ body {
     color: #084298;
 }
 
-/* Ô số tiền còn lại sẽ đỏ nếu dưới 500,000 VND */
-.summary-warning {
-    background: #dc3545 !important;
-    border-left: 8px solid #842029 !important;
-    color: #ffffff !important;
-}
-
-.summary-warning p,
-.summary-warning h2,
-.summary-warning .warning-text {
-    color: #ffffff !important;
-}
-
 .warning-text {
     display: block;
     margin-top: 10px;
     font-weight: 700;
+    color: #dc3545;
 }
 
 .money {
@@ -147,8 +141,10 @@ table td {
     vertical-align: middle;
 }
 
-.login-card {
-    margin-top: 60px;
+.login-box,
+.gen-select-box {
+    width: 100%;
+    max-width: 460px;
 }
 
 @media (max-width: 768px) {
@@ -158,5 +154,10 @@ table td {
 
     .page-header h1 {
         font-size: 28px;
+    }
+
+    .gen-badge {
+        display: inline-block;
+        margin: 8px 0;
     }
 }
