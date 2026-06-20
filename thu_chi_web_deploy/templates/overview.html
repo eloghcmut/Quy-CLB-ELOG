@@ -14,18 +14,23 @@
             <h2>{{ total_income | vnd }}</h2>
         </div>
     </div>
+
     <div class="col-md-4">
         <div class="summary-card summary-expense">
             <p>Tổng tiền ra</p>
             <h2>{{ total_expense | vnd }}</h2>
         </div>
     </div>
+
     <div class="col-md-4">
         <div class="summary-card {% if remaining < 500000 %}summary-warning{% else %}summary-remaining{% endif %}">
             <p>Số tiền còn lại</p>
             <h2>{{ remaining | vnd }}</h2>
+
             {% if remaining < 500000 %}
-                <span class="warning-text">Cảnh báo: số tiền còn lại dưới 500,000 VND</span>
+                <span class="warning-text">
+                    Cảnh báo: số tiền còn lại dưới 500,000 VND
+                </span>
             {% endif %}
         </div>
     </div>
@@ -35,6 +40,7 @@
     <div class="card-header fw-semibold">
         Bảng tổng hợp tiền vào
     </div>
+
     <div class="card-body table-responsive">
         <table class="table table-bordered table-hover align-middle">
             <thead class="table-light">
@@ -47,6 +53,7 @@
                     <th>Hành động</th>
                 </tr>
             </thead>
+
             <tbody>
                 {% for item in incomes %}
                 <tr>
@@ -57,13 +64,17 @@
                     <td>{{ item.date }}</td>
                     <td>
                         <form method="POST" action="{{ url_for('delete_income', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
-                            <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                Xóa
+                            </button>
                         </form>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">Chưa có dữ liệu tiền vào.</td>
+                    <td colspan="6" class="text-center text-muted">
+                        Chưa có dữ liệu tiền vào.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -75,6 +86,7 @@
     <div class="card-header fw-semibold">
         Bảng tổng hợp tiền ra
     </div>
+
     <div class="card-body table-responsive">
         <table class="table table-bordered table-hover align-middle">
             <thead class="table-light">
@@ -87,6 +99,7 @@
                     <th>Hành động</th>
                 </tr>
             </thead>
+
             <tbody>
                 {% for item in expenses %}
                 <tr>
@@ -97,13 +110,17 @@
                     <td>{{ item.date }}</td>
                     <td>
                         <form method="POST" action="{{ url_for('delete_expense', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
-                            <button type="submit" class="btn btn-danger btn-sm">Xóa</button>
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                Xóa
+                            </button>
                         </form>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">Chưa có dữ liệu tiền ra.</td>
+                    <td colspan="6" class="text-center text-muted">
+                        Chưa có dữ liệu tiền ra.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
