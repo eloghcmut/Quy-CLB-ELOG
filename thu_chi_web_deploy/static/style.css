@@ -75,25 +75,49 @@ body {
 }
 
 .summary-income {
+    background: #e8f7ef;
     border-left: 8px solid #198754;
+    color: #146c43;
+}
+
+.summary-income p,
+.summary-income h2 {
+    color: #146c43;
 }
 
 .summary-expense {
+    background: #fdecec;
     border-left: 8px solid #dc3545;
+    color: #b02a37;
+}
+
+.summary-expense p,
+.summary-expense h2 {
+    color: #b02a37;
 }
 
 .summary-remaining {
+    background: #eaf3ff;
     border-left: 8px solid #0d6efd;
+    color: #084298;
 }
 
+.summary-remaining p,
+.summary-remaining h2 {
+    color: #084298;
+}
+
+/* Ô số tiền còn lại sẽ đỏ nếu dưới 500,000 VND */
 .summary-warning {
-    background: #ffe5e8;
-    border-left: 8px solid #dc3545;
+    background: #dc3545 !important;
+    border-left: 8px solid #842029 !important;
+    color: #ffffff !important;
 }
 
+.summary-warning p,
 .summary-warning h2,
-.warning-text {
-    color: #b02a37;
+.summary-warning .warning-text {
+    color: #ffffff !important;
 }
 
 .warning-text {
@@ -123,6 +147,10 @@ table td {
     vertical-align: middle;
 }
 
+.login-card {
+    margin-top: 60px;
+}
+
 @media (max-width: 768px) {
     .summary-card h2 {
         font-size: 24px;
@@ -131,8 +159,4 @@ table td {
     .page-header h1 {
         font-size: 28px;
     }
-}
-
-.login-card {
-    margin-top: 60px;
 }
