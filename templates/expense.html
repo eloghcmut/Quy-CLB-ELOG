@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Tiền ra{% endblock %}
+{% block title %}Tiền ra - {{ selected_gen }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>Tiền ra</h1>
-    <p>Nhập và theo dõi các khoản tiền đã sử dụng.</p>
+    <h1>Tiền ra - Quỹ {{ selected_gen }}</h1>
+    <p>Nhập và theo dõi các khoản tiền đã sử dụng của {{ selected_gen }}.</p>
 </div>
 
 <div class="card custom-card mb-4">
@@ -41,7 +41,7 @@
 
             <div class="mt-3">
                 <button type="submit" class="btn btn-success">
-                    Thêm tiền ra
+                    Thêm tiền ra {{ selected_gen }}
                 </button>
             </div>
         </form>
@@ -50,7 +50,7 @@
 
 <div class="card custom-card">
     <div class="card-header fw-semibold">
-        Danh sách tiền ra
+        Danh sách tiền ra - {{ selected_gen }}
     </div>
 
     <div class="card-body table-responsive">
@@ -75,7 +75,11 @@
                     <td>{{ item.description }}</td>
                     <td>{{ item.date }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('delete_expense', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
+                        <form 
+                            method="POST" 
+                            action="{{ url_for('delete_expense', item_id=item.id) }}" 
+                            onsubmit="return confirm('Bạn có chắc muốn xóa khoản tiền ra này không?');"
+                        >
                             <button type="submit" class="btn btn-danger btn-sm">
                                 Xóa
                             </button>
@@ -85,7 +89,7 @@
                 {% else %}
                 <tr>
                     <td colspan="6" class="text-center text-muted">
-                        Chưa có dữ liệu tiền ra.
+                        Chưa có dữ liệu tiền ra cho {{ selected_gen }}.
                     </td>
                 </tr>
                 {% endfor %}
