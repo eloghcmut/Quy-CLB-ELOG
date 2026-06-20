@@ -23,11 +23,11 @@
     </div>
 
     <div class="col-md-4">
-        <div class="summary-card {% if remaining < 500000 %}summary-warning{% else %}summary-remaining{% endif %}">
+        <div class="summary-card summary-remaining">
             <p>Số tiền còn lại</p>
             <h2>{{ remaining | vnd }}</h2>
 
-            {% if remaining < 500000 %}
+            {% if remaining|int < 500000 %}
                 <span class="warning-text">
                     Cảnh báo: số tiền còn lại dưới 500,000 VND
                 </span>
@@ -63,7 +63,11 @@
                     <td>{{ item.description }}</td>
                     <td>{{ item.date }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('delete_income', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
+                        <form 
+                            method="POST" 
+                            action="{{ url_for('delete_income', item_id=item.id) }}" 
+                            onsubmit="return confirm('Bạn có chắc muốn xóa khoản tiền vào này không?');"
+                        >
                             <button type="submit" class="btn btn-danger btn-sm">
                                 Xóa
                             </button>
@@ -109,7 +113,11 @@
                     <td>{{ item.description }}</td>
                     <td>{{ item.date }}</td>
                     <td>
-                        <form method="POST" action="{{ url_for('delete_expense', item_id=item.id) }}" onsubmit="return confirm('Bạn có chắc muốn xóa khoản này không?');">
+                        <form 
+                            method="POST" 
+                            action="{{ url_for('delete_expense', item_id=item.id) }}" 
+                            onsubmit="return confirm('Bạn có chắc muốn xóa khoản tiền ra này không?');"
+                        >
                             <button type="submit" class="btn btn-danger btn-sm">
                                 Xóa
                             </button>
