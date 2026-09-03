@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Tổng quan - Quỹ {{ selected_gen }}</h1>
-    <p>Xem tổng tiền vào, tổng tiền ra và số tiền còn lại của {{ selected_gen }}.</p>
+    <p>Xem tổng tiền vào, tổng tiền ra, số tiền còn lại và dashboard chi tiêu của {{ selected_gen }}.</p>
 </div>
 
 <div class="row g-3 mb-4">
@@ -36,6 +36,145 @@
     </div>
 </div>
 
+<!-- DASHBOARD VISUAL -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card custom-card dashboard-card h-100">
+            <div class="card-header fw-semibold">
+                Ai dùng nhiều tiền nhất - {{ selected_gen }}
+            </div>
+
+            <div class="card-body">
+                {% if person_labels %}
+                    <div class="chart-box">
+                        <canvas id="personSpendingChart"></canvas>
+                    </div>
+
+                    {% if top_person %}
+                    <div class="dashboard-note mt-3">
+                        Người chi nhiều nhất:
+                        <strong>{{ top_person.person }}</strong>
+                        - <strong>{{ top_person.total | vnd }}</strong>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted mb-0">
+                        Chưa có dữ liệu tiền ra để hiển thị biểu đồ.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card custom-card dashboard-card h-100">
+            <div class="card-header fw-semibold">
+                Tiền chi theo hạng mục - {{ selected_gen }}
+            </div>
+
+            <div class="card-body">
+                {% if category_labels %}
+                    <div class="chart-box">
+                        <canvas id="categorySpendingChart"></canvas>
+                    </div>
+
+                    {% if top_category %}
+                    <div class="dashboard-note mt-3">
+                        Hạng mục chi nhiều nhất:
+                        <strong>{{ top_category.category }}</strong>
+                        - <strong>{{ top_category.total | vnd }}</strong>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted mb-0">
+                        Chưa có dữ liệu hạng mục chi để hiển thị biểu đồ.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BẢNG DASHBOARD -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="card custom-card h-100">
+            <div class="card-header fw-semibold">
+                Bảng xếp hạng chi tiêu theo người - {{ selected_gen }}
+            </div>
+
+            <div class="card-body table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Hạng</th>
+                            <th>Người chịu trách nhiệm</th>
+                            <th>Tổng tiền đã dùng</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for item in spending_by_person %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ item.person }}</td>
+                            <td class="money expense-money">{{ item.total | vnd }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted">
+                                Chưa có dữ liệu chi tiêu theo người.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card custom-card h-100">
+            <div class="card-header fw-semibold">
+                Bảng tổng hợp chi tiêu theo hạng mục - {{ selected_gen }}
+            </div>
+
+            <div class="card-body table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>STT</th>
+                            <th>Hạng mục</th>
+                            <th>Tổng chi</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for item in spending_by_category %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <span class="badge bg-secondary">
+                                    {{ item.category }}
+                                </span>
+                            </td>
+                            <td class="money expense-money">{{ item.total | vnd }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted">
+                                Chưa có dữ liệu chi tiêu theo hạng mục.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- BẢNG TIỀN VÀO -->
 <div class="card custom-card mb-4">
     <div class="card-header fw-semibold">
         Bảng tổng hợp tiền vào - {{ selected_gen }}
@@ -86,6 +225,7 @@
     </div>
 </div>
 
+<!-- BẢNG TIỀN RA -->
 <div class="card custom-card">
     <div class="card-header fw-semibold">
         Bảng tổng hợp tiền ra - {{ selected_gen }}
@@ -161,4 +301,85 @@
         </table>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const personLabels = {{ person_labels | tojson }};
+    const personValues = {{ person_values | tojson }};
+
+    const categoryLabels = {{ category_labels | tojson }};
+    const categoryValues = {{ category_values | tojson }};
+
+    function formatVND(value) {
+        return new Intl.NumberFormat("vi-VN").format(value) + " VND";
+    }
+
+    if (document.getElementById("personSpendingChart")) {
+        new Chart(document.getElementById("personSpendingChart"), {
+            type: "bar",
+            data: {
+                labels: personLabels,
+                datasets: [{
+                    label: "Tổng tiền đã dùng",
+                    data: personValues,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: "y",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatVND(context.raw || 0);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            callback: function(value) {
+                                return formatVND(value);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    if (document.getElementById("categorySpendingChart")) {
+        new Chart(document.getElementById("categorySpendingChart"), {
+            type: "doughnut",
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    label: "Tổng chi theo hạng mục",
+                    data: categoryValues,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ": " + formatVND(context.raw || 0);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
 {% endblock %}
