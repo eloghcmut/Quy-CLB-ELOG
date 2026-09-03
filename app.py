@@ -125,7 +125,6 @@ def init_db():
             """
         )
 
-        # Bổ sung cột cho bảng cũ nếu thiếu
         cursor.execute(
             "ALTER TABLE incomes ADD COLUMN IF NOT EXISTS generation TEXT DEFAULT 'Chưa phân loại'"
         )
@@ -142,7 +141,6 @@ def init_db():
             "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Khác'"
         )
 
-        # Fill dữ liệu cũ nếu null/rỗng
         cursor.execute(
             "UPDATE incomes SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
         )
@@ -169,7 +167,7 @@ def init_db():
                 amount INTEGER NOT NULL,
                 description TEXT NOT NULL,
                 date TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -184,12 +182,11 @@ def init_db():
                 description TEXT NOT NULL,
                 category TEXT DEFAULT 'Khác',
                 date TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
-        # Bổ sung cột cho SQLite local nếu thiếu
         if not column_exists_sqlite(conn, "incomes", "generation"):
             cursor.execute(
                 "ALTER TABLE incomes ADD COLUMN generation TEXT DEFAULT 'Chưa phân loại'"
@@ -202,12 +199,12 @@ def init_db():
 
         if not column_exists_sqlite(conn, "incomes", "created_at"):
             cursor.execute(
-                "ALTER TABLE incomes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                "ALTER TABLE incomes ADD COLUMN created_at TEXT"
             )
 
         if not column_exists_sqlite(conn, "expenses", "created_at"):
             cursor.execute(
-                "ALTER TABLE expenses ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                "ALTER TABLE expenses ADD COLUMN created_at TEXT"
             )
 
         if not column_exists_sqlite(conn, "expenses", "category"):
@@ -380,6 +377,7 @@ def overview():
         remaining=remaining,
         incomes=incomes,
         expenses=expenses,
+        expense_categories=EXPENSE_CATEGORIES,
     )
 
 
@@ -515,6 +513,41 @@ def expense():
         selected_gen=selected_gen,
         expense_categories=EXPENSE_CATEGORIES,
     )
+
+
+@app.route("/update-expense-category/<int:item_id>", methods=["POST"])
+@generation_required
+def update_expense_category(item_id):
+    selected_gen = session["selected_gen"]
+    ph = placeholder()
+
+    category = request.form.get("category", "").strip()
+
+    if not category:
+        flash("Vui lòng chọn hạng mục chi.", "danger")
+        return redirect(request.referrer or url_for("expense"))
+
+    if category not in EXPENSE_CATEGORIES:
+        flash("Hạng mục chi không hợp lệ.", "danger")
+        return redirect(request.referrer or url_for("expense"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        UPDATE expenses
+        SET category = {ph}
+        WHERE id = {ph} AND generation = {ph}
+        """,
+        (category, item_id, selected_gen),
+    )
+
+    conn.commit()
+    conn.close()
+
+    flash("Đã cập nhật hạng mục chi.", "success")
+    return redirect(request.referrer or url_for("expense"))
 
 
 @app.route("/delete-income/<int:item_id>", methods=["POST"])
