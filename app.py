@@ -26,7 +26,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 # GEN_OPTIONS = Gen 3,Gen 4,Gen 5
 GEN_OPTIONS = [
     gen.strip()
-    for gen in os.environ.get("GEN_OPTIONS", "Gen 3,Gen 4").split(",")
+    for gen in os.environ.get("GEN_OPTIONS", "Gen 3,Gen 4,Gen 5").split(",")
     if gen.strip()
 ]
 
