@@ -19,17 +19,22 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
 # Mật khẩu đăng nhập web
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "123456")
 
-# Database URL: local không có thì dùng SQLite, Render/Neon thì dùng PostgreSQL
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# Database URL:
+# Local không có thì dùng SQLite.
+# Render/Neon thì dùng PostgreSQL thông qua DATABASE_URL.
+DATABASE_URL = os.environ.get("NEON_DATABASE_URL") or os.environ.get("DATABASE_URL")
 
-# Nếu sau này muốn thêm Gen, vào Render Environment thêm:
-# GEN_OPTIONS = Gen 3,Gen 4,Gen 5
+# Nếu sau này muốn thêm Gen, vào Render Environment thêm/sửa:
+# GEN_OPTIONS = Gen 3,Gen 4,Gen 5,Gen 6
 GEN_OPTIONS = [
     gen.strip()
     for gen in os.environ.get("GEN_OPTIONS", "Gen 3,Gen 4,Gen 5").split(",")
     if gen.strip()
 ]
 
+# Danh sách hạng mục chi tiêu
+# Nếu sau này muốn thêm hạng mục mới, vào Render Environment thêm/sửa:
+# EXPENSE_CATEGORIES = Ăn uống,In ấn,Quà tặng,Vận chuyển,...
 EXPENSE_CATEGORIES = [
     category.strip()
     for category in os.environ.get(
@@ -38,6 +43,7 @@ EXPENSE_CATEGORIES = [
     ).split(",")
     if category.strip()
 ]
+
 
 def is_postgres():
     return DATABASE_URL and DATABASE_URL.startswith(("postgres://", "postgresql://"))
@@ -81,8 +87,10 @@ def column_exists_sqlite(conn, table_name, column_name):
 def init_db():
     """
     Tạo bảng nếu chưa có.
-    Nếu bảng cũ chưa có cột generation thì tự thêm cột generation.
-    Data cũ sẽ được đưa vào 'Chưa phân loại'.
+    Nếu bảng cũ thiếu cột generation, created_at, category thì tự thêm.
+    Data cũ:
+    - generation rỗng/null -> Chưa phân loại
+    - category rỗng/null -> Khác
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -110,24 +118,45 @@ def init_db():
                 person TEXT NOT NULL,
                 amount BIGINT NOT NULL,
                 description TEXT NOT NULL,
+                category TEXT DEFAULT 'Khác',
                 date TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
+        # Bổ sung cột cho bảng cũ nếu thiếu
         cursor.execute(
             "ALTER TABLE incomes ADD COLUMN IF NOT EXISTS generation TEXT DEFAULT 'Chưa phân loại'"
         )
         cursor.execute(
             "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS generation TEXT DEFAULT 'Chưa phân loại'"
         )
+        cursor.execute(
+            "ALTER TABLE incomes ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        )
+        cursor.execute(
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        )
+        cursor.execute(
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Khác'"
+        )
 
+        # Fill dữ liệu cũ nếu null/rỗng
         cursor.execute(
             "UPDATE incomes SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
         )
         cursor.execute(
             "UPDATE expenses SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
+        )
+        cursor.execute(
+            "UPDATE incomes SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+        )
+        cursor.execute(
+            "UPDATE expenses SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+        )
+        cursor.execute(
+            "UPDATE expenses SET category = 'Khác' WHERE category IS NULL OR category = ''"
         )
 
     else:
@@ -153,12 +182,14 @@ def init_db():
                 person TEXT NOT NULL,
                 amount INTEGER NOT NULL,
                 description TEXT NOT NULL,
+                category TEXT DEFAULT 'Khác',
                 date TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
+        # Bổ sung cột cho SQLite local nếu thiếu
         if not column_exists_sqlite(conn, "incomes", "generation"):
             cursor.execute(
                 "ALTER TABLE incomes ADD COLUMN generation TEXT DEFAULT 'Chưa phân loại'"
@@ -169,11 +200,35 @@ def init_db():
                 "ALTER TABLE expenses ADD COLUMN generation TEXT DEFAULT 'Chưa phân loại'"
             )
 
+        if not column_exists_sqlite(conn, "incomes", "created_at"):
+            cursor.execute(
+                "ALTER TABLE incomes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            )
+
+        if not column_exists_sqlite(conn, "expenses", "created_at"):
+            cursor.execute(
+                "ALTER TABLE expenses ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            )
+
+        if not column_exists_sqlite(conn, "expenses", "category"):
+            cursor.execute(
+                "ALTER TABLE expenses ADD COLUMN category TEXT DEFAULT 'Khác'"
+            )
+
         cursor.execute(
             "UPDATE incomes SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
         )
         cursor.execute(
             "UPDATE expenses SET generation = 'Chưa phân loại' WHERE generation IS NULL OR generation = ''"
+        )
+        cursor.execute(
+            "UPDATE incomes SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+        )
+        cursor.execute(
+            "UPDATE expenses SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"
+        )
+        cursor.execute(
+            "UPDATE expenses SET category = 'Khác' WHERE category IS NULL OR category = ''"
         )
 
     conn.commit()
@@ -230,6 +285,7 @@ def login():
 
         if password == APP_PASSWORD:
             session["logged_in"] = True
+            session.pop("selected_gen", None)
             flash("Đăng nhập thành công.", "success")
             return redirect(url_for("select_generation"))
 
@@ -305,7 +361,7 @@ def overview():
 
     cursor.execute(
         f"""
-        SELECT id, generation, person, amount, description, date, created_at
+        SELECT id, generation, person, amount, description, category, date, created_at
         FROM expenses
         WHERE generation = {ph}
         ORDER BY date DESC, id DESC
@@ -399,10 +455,15 @@ def expense():
         person = request.form.get("person", "").strip()
         amount_raw = request.form.get("amount", "").strip()
         description = request.form.get("description", "").strip()
+        category = request.form.get("category", "").strip()
         date = request.form.get("date", "").strip()
 
-        if not person or not amount_raw or not description or not date:
+        if not person or not amount_raw or not description or not category or not date:
             flash("Vui lòng nhập đầy đủ thông tin.", "danger")
+            return redirect(url_for("expense"))
+
+        if category not in EXPENSE_CATEGORIES:
+            flash("Hạng mục chi không hợp lệ.", "danger")
             return redirect(url_for("expense"))
 
         try:
@@ -420,10 +481,10 @@ def expense():
 
         cursor.execute(
             f"""
-            INSERT INTO expenses (generation, person, amount, description, date)
-            VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+            INSERT INTO expenses (generation, person, amount, description, category, date)
+            VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})
             """,
-            (selected_gen, person, amount, description, date),
+            (selected_gen, person, amount, description, category, date),
         )
 
         conn.commit()
@@ -437,7 +498,7 @@ def expense():
 
     cursor.execute(
         f"""
-        SELECT id, generation, person, amount, description, date, created_at
+        SELECT id, generation, person, amount, description, category, date, created_at
         FROM expenses
         WHERE generation = {ph}
         ORDER BY date DESC, id DESC
@@ -448,7 +509,12 @@ def expense():
 
     conn.close()
 
-    return render_template("expense.html", expenses=expenses, selected_gen=selected_gen)
+    return render_template(
+        "expense.html",
+        expenses=expenses,
+        selected_gen=selected_gen,
+        expense_categories=EXPENSE_CATEGORIES,
+    )
 
 
 @app.route("/delete-income/<int:item_id>", methods=["POST"])
