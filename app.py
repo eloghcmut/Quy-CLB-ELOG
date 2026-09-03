@@ -30,6 +30,14 @@ GEN_OPTIONS = [
     if gen.strip()
 ]
 
+EXPENSE_CATEGORIES = [
+    category.strip()
+    for category in os.environ.get(
+        "EXPENSE_CATEGORIES",
+        "Ăn uống,In ấn,Quà tặng,Vận chuyển,Địa điểm,Trang trí,Vật dụng,Truyền thông,Sự kiện,Khác"
+    ).split(",")
+    if category.strip()
+]
 
 def is_postgres():
     return DATABASE_URL and DATABASE_URL.startswith(("postgres://", "postgresql://"))
