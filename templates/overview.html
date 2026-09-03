@@ -112,12 +112,32 @@
                     <td>{{ item.person }}</td>
                     <td class="money expense-money">{{ item.amount | vnd }}</td>
                     <td>{{ item.description }}</td>
+
                     <td>
-                        <span class="badge bg-secondary">
-                            {{ item.category or 'Khác' }}
-                        </span>
+                        <form 
+                            method="POST" 
+                            action="{{ url_for('update_expense_category', item_id=item.id) }}" 
+                            class="category-form d-flex gap-2 align-items-center"
+                        >
+                            <select name="category" class="form-select form-select-sm category-select" required>
+                                {% for category in expense_categories %}
+                                    <option 
+                                        value="{{ category }}" 
+                                        {% if (item.category or 'Khác') == category %}selected{% endif %}
+                                    >
+                                        {{ category }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+
+                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                Lưu
+                            </button>
+                        </form>
                     </td>
+
                     <td>{{ item.date }}</td>
+
                     <td>
                         <form 
                             method="POST" 
