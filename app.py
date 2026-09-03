@@ -331,12 +331,14 @@ def overview():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Tổng tiền vào
     cursor.execute(
         f"SELECT COALESCE(SUM(amount), 0) AS total FROM incomes WHERE generation = {ph}",
         (selected_gen,),
     )
     total_income = cursor.fetchone()["total"] or 0
 
+    # Tổng tiền ra
     cursor.execute(
         f"SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE generation = {ph}",
         (selected_gen,),
@@ -345,6 +347,7 @@ def overview():
 
     remaining = int(total_income) - int(total_expense)
 
+    # Danh sách tiền vào
     cursor.execute(
         f"""
         SELECT id, generation, person, amount, description, date, created_at
@@ -356,6 +359,7 @@ def overview():
     )
     incomes = cursor.fetchall()
 
+    # Danh sách tiền ra
     cursor.execute(
         f"""
         SELECT id, generation, person, amount, description, category, date, created_at
@@ -367,7 +371,48 @@ def overview():
     )
     expenses = cursor.fetchall()
 
+    # Dashboard: xếp hạng chi tiêu theo người
+    cursor.execute(
+        f"""
+        SELECT 
+            person,
+            COALESCE(SUM(amount), 0) AS total
+        FROM expenses
+        WHERE generation = {ph}
+        GROUP BY person
+        ORDER BY total DESC
+        LIMIT 10
+        """,
+        (selected_gen,),
+    )
+    spending_by_person = cursor.fetchall()
+
+    # Dashboard: tổng hợp chi tiêu theo hạng mục
+    cursor.execute(
+        f"""
+        SELECT 
+            COALESCE(NULLIF(category, ''), 'Khác') AS category,
+            COALESCE(SUM(amount), 0) AS total
+        FROM expenses
+        WHERE generation = {ph}
+        GROUP BY COALESCE(NULLIF(category, ''), 'Khác')
+        ORDER BY total DESC
+        """,
+        (selected_gen,),
+    )
+    spending_by_category = cursor.fetchall()
+
     conn.close()
+
+    # Chuẩn bị data cho Chart.js
+    person_labels = [row["person"] for row in spending_by_person]
+    person_values = [int(row["total"] or 0) for row in spending_by_person]
+
+    category_labels = [row["category"] for row in spending_by_category]
+    category_values = [int(row["total"] or 0) for row in spending_by_category]
+
+    top_person = spending_by_person[0] if spending_by_person else None
+    top_category = spending_by_category[0] if spending_by_category else None
 
     return render_template(
         "overview.html",
@@ -378,6 +423,14 @@ def overview():
         incomes=incomes,
         expenses=expenses,
         expense_categories=EXPENSE_CATEGORIES,
+        spending_by_person=spending_by_person,
+        spending_by_category=spending_by_category,
+        person_labels=person_labels,
+        person_values=person_values,
+        category_labels=category_labels,
+        category_values=category_values,
+        top_person=top_person,
+        top_category=top_category,
     )
 
 
