@@ -268,3 +268,15 @@ body.auth-page .btn-dark {
         margin: 0 12px;
     }
 }
+
+.category-form {
+    min-width: 230px;
+}
+
+.category-select {
+    min-width: 140px;
+}
+
+.category-form .btn {
+    white-space: nowrap;
+}
